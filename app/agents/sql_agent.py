@@ -18,6 +18,7 @@ class AnalysisSpec:
 
     metric: str | None = None
     dimensions: list[str] | None = None
+    time_grain: str | None = None
     date_start: str | None = None
     date_end: str | None = None
     filters: dict[str, Any] | None = None
@@ -47,6 +48,31 @@ class SQLAnalystAgent:
     def resolve_metric(self, metric_text: str):
         """Resolve a user-facing metric name through the semantic layer."""
         return self.semantic_catalog.resolve_metric(metric_text)
+
+    def resolve_time_grain(self, question: str) -> str | None:
+        """Resolve a supported temporal grouping from the user question."""
+
+        normalized = question.lower()
+
+        grain_aliases = {
+            "day": ("day", "daily"),
+            "week": ("week", "weekly"),
+            "month": ("month", "monthly"),
+            "quarter": ("quarter", "quarterly"),
+            "year": ("year", "yearly", "annually"),
+        }
+
+        for grain, aliases in grain_aliases.items():
+            if any(
+                re.search(
+                    rf"\b{re.escape(alias)}\b",
+                    normalized,
+                )
+                for alias in aliases
+            ):
+                return grain
+
+        return None
 
     def validate_query(self, sql: str):
         """Validate SQL through the existing SQL Tool Layer."""
@@ -209,7 +235,7 @@ class SQLAnalystAgent:
         metric_text = re.sub(r"\b(20\d{2})\b", "", question)
 
         metric_text = re.sub(
-            r"\b(in|for|during|of|year|by|what|was|were|is|are|the|show|give|tell|me|please|how|much)\b",
+            r"\b(in|for|during|of|year|month|quarter|week|day|by|what|was|were|is|are|the|show|give|tell|me|please|how|much)\b",
             "",
             metric_text,
             flags=re.IGNORECASE,
@@ -262,6 +288,7 @@ class SQLAnalystAgent:
 
         date_start, date_end = self.resolve_year(request.question)
         dimension = self.resolve_dimension(request.question)
+        time_grain = self.resolve_time_grain(request.question)
 
         if metric is None:
             raise ValueError(
@@ -277,6 +304,7 @@ class SQLAnalystAgent:
         return AnalysisSpec(
             metric=metric,
             dimensions=[dimension] if dimension is not None else [],
+            time_grain=time_grain,
             date_start=date_start,
             date_end=date_end,
             filters={},
@@ -305,6 +333,14 @@ class SQLAnalystAgent:
             "customer.customer_status": "customers.customer_status",
         }
 
+        time_grain_columns = {
+            "day": "calendar.date",
+            "week": "calendar.week",
+            "month": "calendar.month",
+            "quarter": "calendar.quarter",
+            "year": "calendar.year",
+        }
+
         if spec.dimensions is None:
             raise ValueError(
                 "Dimensions must be provided as a list."
@@ -313,6 +349,17 @@ class SQLAnalystAgent:
         if len(spec.dimensions) > 1:
             raise ValueError(
                 "This SQL generator currently supports at most one dimension."
+            )
+
+        if spec.time_grain is not None and spec.time_grain not in time_grain_columns:
+            raise ValueError(
+                f"Unsupported time grain for SQL generation: {spec.time_grain}"
+            )
+
+        if spec.time_grain is not None and spec.dimensions:
+            raise ValueError(
+                "This SQL generator currently supports either one time grain "
+                "or one categorical dimension, not both."
             )
 
         metric_expressions = {
@@ -333,6 +380,25 @@ class SQLAnalystAgent:
         JOIN order_items
             ON orders.order_id = order_items.order_id
         """.strip()
+
+        if spec.time_grain is not None:
+            time_column = time_grain_columns[spec.time_grain]
+
+            from_clause += """
+        JOIN calendar
+            ON calendar.date = orders.order_date
+        """.rstrip()
+
+            return f"""
+SELECT
+     {time_column} AS {spec.time_grain},
+     {metric_expression} AS {spec.metric}
+{from_clause}
+WHERE orders.order_date >= '{spec.date_start}'
+  AND orders.order_date <= '{spec.date_end}'
+GROUP BY {time_column}
+ORDER BY {time_column}
+""".strip()
 
         if not spec.dimensions:
             return f"""
@@ -410,6 +476,7 @@ ORDER BY {dimension_column}
             "question": request.question,
             "metric": spec.metric,
             "dimensions": spec.dimensions or [],
+            "time_grain": spec.time_grain,
             "date_start": spec.date_start,
             "date_end": spec.date_end,
             "columns": result.columns,
@@ -430,6 +497,7 @@ ORDER BY {dimension_column}
         return {
             "metric": spec.metric,
             "dimensions": spec.dimensions or [],
+            "time_grain": spec.time_grain,
             "date_start": spec.date_start,
             "date_end": spec.date_end,
             "sql": sql,
@@ -644,6 +712,43 @@ ORDER BY {dimension_column}
 
         if not result.rows:
             return "No matching data was found."
+
+        if (
+            spec.metric in {"net_revenue", "gross_revenue"}
+            and spec.time_grain is not None
+        ):
+            metric_labels = {
+                "net_revenue": "Net revenue",
+                "gross_revenue": "Gross revenue",
+            }
+
+            grain_columns = {
+                "day": "day",
+                "week": "week",
+                "month": "month",
+                "quarter": "quarter",
+                "year": "year",
+            }
+
+            grain_column = grain_columns[spec.time_grain]
+
+            lines = [
+                f"{row[grain_column]}: {row[spec.metric]}"
+                for row in result.rows
+            ]
+
+            date_text = ""
+
+            if spec.date_start and spec.date_end:
+                date_text = (
+                    f" from {spec.date_start} to {spec.date_end}"
+                )
+
+            return (
+                f"{metric_labels[spec.metric]} by {spec.time_grain}"
+                f"{date_text}:\n"
+                + "\n".join(lines)
+            )
 
         if spec.metric in {"net_revenue", "gross_revenue"} and not spec.dimensions:
             metric_labels = {

@@ -217,6 +217,24 @@ def test_run_revenue_by_category_in_2025():
     assert response.provenance["sql_valid"] is True
     assert response.provenance["execution_success"] is True
 
+def test_run_revenue_by_month_in_2025_formats_all_rows():
+    agent = SQLAnalystAgent()
+
+    response = agent.run(
+        SQLAgentRequest(
+            question="revenue by month in 2025"
+        )
+    )
+
+    assert response.success is True
+    assert response.answer is not None
+    assert response.rows
+    assert len(response.rows) == 12
+
+    assert "Net revenue by month" in response.answer
+    assert "1:" in response.answer
+    assert "12:" in response.answer
+
 def test_run_rejects_unsupported_metric_generation():
     agent = SQLAnalystAgent()
 
@@ -906,3 +924,110 @@ def test_run_fails_when_required_schema_is_missing(monkeypatch):
     assert response.success is False
     assert "products.category" in response.errors[0]
     assert response.provenance["schema_valid"] is False
+
+def test_resolve_time_grain_aliases():
+    agent = SQLAnalystAgent()
+
+    assert agent.resolve_time_grain("revenue by day in 2025") == "day"
+    assert agent.resolve_time_grain("revenue by weekly trend in 2025") == "week"
+    assert agent.resolve_time_grain("revenue by month in 2025") == "month"
+    assert agent.resolve_time_grain("revenue by quarterly trend in 2025") == "quarter"
+    assert agent.resolve_time_grain("revenue by yearly trend in 2025") == "year"
+
+
+def test_build_analysis_spec_for_revenue_by_month():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by month in 2025"
+        )
+    )
+
+    assert spec.metric == "net_revenue"
+    assert spec.dimensions == []
+    assert spec.time_grain == "month"
+    assert spec.date_start == "2025-01-01"
+    assert spec.date_end == "2025-12-31"
+
+
+def test_generate_sql_for_revenue_by_month():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by month in 2025"
+        )
+    )
+
+    sql = agent.generate_sql(spec)
+
+    assert "calendar.date = orders.order_date" in sql
+    assert "calendar.month AS month" in sql
+    assert "GROUP BY calendar.month" in sql
+    assert "ORDER BY calendar.month" in sql
+    assert "SUM(order_items.net_revenue) AS net_revenue" in sql
+
+
+def test_generate_sql_for_revenue_by_quarter():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by quarter in 2025"
+        )
+    )
+
+    sql = agent.generate_sql(spec)
+
+    assert "calendar.quarter AS quarter" in sql
+    assert "GROUP BY calendar.quarter" in sql
+    assert "ORDER BY calendar.quarter" in sql
+
+
+def test_generate_sql_for_revenue_by_year():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by year in 2025"
+        )
+    )
+
+    sql = agent.generate_sql(spec)
+
+    assert "calendar.year AS year" in sql
+    assert "GROUP BY calendar.year" in sql
+    assert "ORDER BY calendar.year" in sql
+
+
+def test_generate_sql_for_revenue_by_day():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by day in 2025"
+        )
+    )
+
+    sql = agent.generate_sql(spec)
+
+    assert "calendar.date AS day" in sql
+    assert "GROUP BY calendar.date" in sql
+    assert "ORDER BY calendar.date" in sql
+
+
+def test_generate_sql_for_revenue_by_week():
+    agent = SQLAnalystAgent()
+
+    spec = agent.build_analysis_spec(
+        SQLAgentRequest(
+            question="revenue by week in 2025"
+        )
+    )
+
+    sql = agent.generate_sql(spec)
+
+    assert "calendar.week AS week" in sql
+    assert "GROUP BY calendar.week" in sql
+    assert "ORDER BY calendar.week" in sql
