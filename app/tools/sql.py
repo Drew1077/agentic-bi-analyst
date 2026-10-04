@@ -41,6 +41,10 @@ DESTRUCTIVE_KEYWORDS = {
 }
 
 MAX_RESULT_ROWS = 10_000
+# Upper bound for the intended analytical query budget. Enforcement is delegated
+# to the MySQL server/deployment configuration; mysql-connector does not expose
+# a portable per-cursor execution timeout API.
+QUERY_TIMEOUT_MS = int(os.getenv("MYSQL_QUERY_TIMEOUT_MS", "30000"))
 
 FACT_ISOLATION_PATTERNS = [
     (

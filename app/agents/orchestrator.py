@@ -1,3 +1,6 @@
+import logging
+import time
+
 from app.agents.sql_agent import SQLAgentRequest, SQLAnalystAgent
 from app.agents.root_cause_agent import (
     RootCauseAgent,
@@ -6,6 +9,11 @@ from app.agents.root_cause_agent import (
 from app.agents.critic_agent import (
     CriticAgent,
     CriticAgentRequest,
+)
+from app.agents.observability import (
+    finish_run,
+    record_step,
+    start_run,
 )
 from app.agents.orchestrator_models import (
     AgentResult,
@@ -17,6 +25,9 @@ from app.agents.orchestrator_models import (
     StepStatus,
     WorkflowStatus,
 )
+
+
+logger = logging.getLogger("agentic_bi_analyst.orchestrator")
 
 
 class Orchestrator:
@@ -316,58 +327,54 @@ class Orchestrator:
     def run(self, question: str) -> OrchestratorResponse:
         """Run the orchestrator workflow for a user question."""
 
+        trace = start_run(question if isinstance(question, str) else str(question))
         state = self.plan(question)
+        state.run_id = trace["run_id"]
+        state.observability = trace
+        logger.info("analysis_run_started run_id=%s", trace["run_id"])
+
+        def failure_response() -> OrchestratorResponse:
+            public_trace = finish_run(
+                trace,
+                status=state.status.value,
+                success=False,
+                answer=None,
+                errors=state.errors,
+            )
+            return OrchestratorResponse(
+                success=False, answer=None, intent=state.intent, plan=state.plan,
+                results=state.agent_results, evidence={}, provenance={},
+                errors=state.errors, run_id=trace["run_id"],
+                observability=public_trace,
+            )
 
         if state.status != WorkflowStatus.PLANNING:
-            return OrchestratorResponse(
-                success=False,
-                answer=None,
-                intent=state.intent,
-                plan=state.plan,
-                results=state.agent_results,
-                evidence={},
-                provenance={},
-                errors=state.errors,
-            )
-
+            return failure_response()
         if state.plan is None or not state.plan.steps:
             state.status = WorkflowStatus.STOPPED
-            state.errors.append(
-                "No executable plan was created."
-            )
-
-            return OrchestratorResponse(
-                success=False,
-                answer=None,
-                intent=state.intent,
-                plan=state.plan,
-                results=state.agent_results,
-                evidence={},
-                provenance={},
-                errors=state.errors,
-            )
+            state.errors.append("No executable plan was created.")
+            return failure_response()
 
         state.status = WorkflowStatus.RUNNING
         state.plan.status = WorkflowStatus.RUNNING
 
         for step in state.plan.steps:
             state.current_step = step.step_id
-
             while True:
                 step.status = StepStatus.RUNNING
-
-                result = self.execute_step(
-                    state,
-                    step,
-                )
+                step_started = time.perf_counter()
+                result = self.execute_step(state, step)
 
                 if result.success:
-                    result = self.validate_result(
-                        state,
-                        result,
-                    )
+                    result = self.validate_result(state, result)
 
                 state.agent_results[step.step_id] = result
+                record_step(
+                    trace, step_id=step.step_id, agent=step.agent,
+                    status="completed" if result.success else "failed",
+                    duration_ms=(time.perf_counter() - step_started) * 1000,
+                    metadata=result.metadata, errors=result.errors,
+                )
 
                 if result.success:
                     step.status = StepStatus.COMPLETED
@@ -376,34 +383,20 @@ class Orchestrator:
 
                 step.status = StepStatus.FAILED
                 state.errors.extend(result.errors)
-
                 if state.retry_count < state.max_retries:
                     state.retry_count += 1
+                    trace["retries"] = state.retry_count
                     state.status = WorkflowStatus.RETRYING
                     state.plan.status = WorkflowStatus.RETRYING
                     continue
 
                 state.status = WorkflowStatus.FAILED
                 state.plan.status = WorkflowStatus.FAILED
-
-                return OrchestratorResponse(
-                    success=False,
-                    answer=None,
-                    intent=state.intent,
-                    plan=state.plan,
-                    results=state.agent_results,
-                    evidence={},
-                    provenance={},
-                    errors=state.errors,
-                )
+                return failure_response()
 
         state.status = WorkflowStatus.COMPLETED
         state.plan.status = WorkflowStatus.COMPLETED
-
-        final_result = state.agent_results[
-            state.completed_steps[-1]
-        ]
-
+        final_result = state.agent_results[state.completed_steps[-1]]
         final_output = final_result.output
 
         if hasattr(final_output, "answer"):
@@ -413,27 +406,18 @@ class Orchestrator:
         else:
             answer = str(final_output)
 
-        if hasattr(final_output, "evidence"):
-            evidence = final_output.evidence
-        else:
-            evidence = {}
-
-        if hasattr(final_output, "provenance"):
-            provenance = final_output.provenance
-        else:
-            provenance = {}
-
+        evidence = final_output.evidence if hasattr(final_output, "evidence") else {}
+        provenance = final_output.provenance if hasattr(final_output, "provenance") else {}
         state.final_output = answer
+        public_trace = finish_run(
+            trace, status=state.status.value, success=True,
+            answer=answer, errors=[],
+        )
 
         return OrchestratorResponse(
-            success=True,
-            answer=answer,
-            intent=state.intent,
-            plan=state.plan,
-            results=state.agent_results,
-            evidence=evidence,
-            provenance=provenance,
-            errors=[],
+            success=True, answer=answer, intent=state.intent, plan=state.plan,
+            results=state.agent_results, evidence=evidence, provenance=provenance,
+            errors=[], run_id=trace["run_id"], observability=public_trace,
         )
 
     def plan(self, question: str) -> OrchestratorState:

@@ -22,6 +22,8 @@ class AnalyzeResponse(BaseModel):
     """JSON-safe adapter contract for an Orchestrator response."""
 
     model_config = ConfigDict(extra="forbid")
+    run_id: str | None = None
+    observability: dict[str, Any] = Field(default_factory=dict)
 
     success: bool
     answer: str | None

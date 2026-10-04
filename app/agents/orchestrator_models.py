@@ -5,7 +5,6 @@ from typing import Any
 
 class IntentType(str, Enum):
     """Controlled analytical intent categories."""
-
     ANALYTICAL_QUERY = "analytical_query"
     COMPARISON = "comparison"
     TREND = "trend"
@@ -20,7 +19,6 @@ class IntentType(str, Enum):
 
 class StepStatus(str, Enum):
     """Lifecycle status of an individual plan step."""
-
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -30,7 +28,6 @@ class StepStatus(str, Enum):
 
 class WorkflowStatus(str, Enum):
     """Lifecycle status of the complete orchestrator workflow."""
-
     PENDING = "pending"
     PLANNING = "planning"
     RUNNING = "running"
@@ -43,7 +40,6 @@ class WorkflowStatus(str, Enum):
 @dataclass
 class PlanStep:
     """One executable step in an orchestrator plan."""
-
     step_id: str
     agent: str
     action: str
@@ -55,7 +51,6 @@ class PlanStep:
 @dataclass
 class Plan:
     """Structured execution plan produced by the orchestrator."""
-
     plan_id: str
     steps: list[PlanStep] = field(default_factory=list)
     status: WorkflowStatus = WorkflowStatus.PENDING
@@ -64,7 +59,6 @@ class Plan:
 @dataclass
 class AgentResult:
     """Normalized record of an agent execution result."""
-
     agent_name: str
     success: bool
     output: Any = None
@@ -75,7 +69,6 @@ class AgentResult:
 @dataclass
 class OrchestratorState:
     """Runtime state of the complete orchestrator workflow."""
-
     question: str
     intent: IntentType | None = None
     plan: Plan | None = None
@@ -87,12 +80,13 @@ class OrchestratorState:
     max_retries: int = 1
     errors: list[str] = field(default_factory=list)
     final_output: Any = None
+    run_id: str | None = None
+    observability: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class OrchestratorResponse:
     """Output contract for the Orchestrator."""
-
     success: bool
     answer: str | None
     intent: IntentType | None
@@ -101,3 +95,5 @@ class OrchestratorResponse:
     evidence: dict[str, Any]
     provenance: dict[str, Any]
     errors: list[str]
+    run_id: str | None = None
+    observability: dict[str, Any] = field(default_factory=dict)
