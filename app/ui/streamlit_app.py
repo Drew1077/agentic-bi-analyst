@@ -1,7 +1,7 @@
 """Streamlit UI for the Agentic BI Analyst FastAPI service."""
 
 from __future__ import annotations
-
+import base64
 import json
 import os
 from dataclasses import dataclass
@@ -163,6 +163,33 @@ def render_analysis(response: dict[str, Any]) -> None:
             st.subheader("Errors")
             for error in errors:
                 st.error(str(error))
+
+    visualization = response.get("visualization")
+
+    if isinstance(visualization, dict):
+        chart_type = (
+            (visualization.get("chart_spec") or {})
+            .get("chart_type")
+        )
+
+        chart_data = visualization.get("rendered_chart_base64")
+
+        if chart_type and chart_type != "none" and chart_data:
+            try:
+                chart_bytes = base64.b64decode(chart_data)
+
+                st.subheader("Visualization")
+
+                st.image(
+                    chart_bytes,
+                    caption=f"{chart_type.title()} chart",
+                    use_container_width=True,
+                )
+
+            except (ValueError, TypeError):
+                st.warning(
+                    "The visualization artifact could not be rendered."
+                )
 
     with st.expander("Analysis details"):
         st.markdown("**Intent**")

@@ -1,5 +1,6 @@
 import logging
 import time
+import base64
 
 from app.agents.sql_agent import SQLAgentRequest, SQLAnalystAgent
 from app.agents.root_cause_agent import (
@@ -25,6 +26,10 @@ from app.agents.orchestrator_models import (
     StepStatus,
     WorkflowStatus,
 )
+from app.agents.visualization_agent import (
+    VisualizationAgent,
+    VisualizationAgentRequest,
+)
 
 
 logger = logging.getLogger("agentic_bi_analyst.orchestrator")
@@ -36,11 +41,18 @@ class Orchestrator:
     REGISTERED_AGENTS = {
         "sql_analyst",
         "root_cause",
+        "visualization",
     }
 
-    def __init__(self, sql_agent=None, critic_agent=None):
+    def __init__(
+        self,
+        sql_agent=None,
+        critic_agent=None,
+        visualization_agent=None,
+    ):
         self.sql_agent = sql_agent
         self.critic_agent = critic_agent
+        self.visualization_agent = visualization_agent
 
     def validate_request(self, question: str) -> list[str]:
         """Validate the basic orchestrator request."""
@@ -341,11 +353,13 @@ class Orchestrator:
                 answer=None,
                 errors=state.errors,
             )
+        
             return OrchestratorResponse(
                 success=False, answer=None, intent=state.intent, plan=state.plan,
                 results=state.agent_results, evidence={}, provenance={},
                 errors=state.errors, run_id=trace["run_id"],
                 observability=public_trace,
+                
             )
 
         if state.status != WorkflowStatus.PLANNING:
@@ -409,6 +423,59 @@ class Orchestrator:
         evidence = final_output.evidence if hasattr(final_output, "evidence") else {}
         provenance = final_output.provenance if hasattr(final_output, "provenance") else {}
         state.final_output = answer
+        visualization = None
+
+        if final_result.agent_name == "sql_analyst" and final_result.success:
+            if self.visualization_agent is None:
+                self.visualization_agent = VisualizationAgent()
+
+            visualization_started = time.perf_counter()
+
+            visualization_response = self.visualization_agent.run(
+                VisualizationAgentRequest(
+                    question=state.question,
+                    result=final_output,
+                )
+            )
+
+            rendered_chart_base64 = None
+
+            if visualization_response.rendered_chart is not None:
+                rendered_chart_base64 = base64.b64encode(
+                    visualization_response.rendered_chart
+                ).decode("ascii")
+
+            visualization = {
+                "success": visualization_response.success,
+                "chart_spec": visualization_response.chart_spec,
+                "rendered_chart_base64": rendered_chart_base64,
+                "chart_format": visualization_response.chart_format,
+                "validation": visualization_response.validation,
+                "errors": visualization_response.errors,
+            }
+
+            record_step(
+                trace,
+                step_id="visualization",
+                agent="visualization_agent",
+                status=(
+                    "completed"
+                    if visualization_response.success
+                    else "failed"
+                ),
+                duration_ms=(
+                    time.perf_counter() - visualization_started
+                ) * 1000,
+                metadata={
+                    "chart_type": (
+                        visualization_response.chart_spec or {}
+                    ).get("chart_type"),
+                    "rendered": (
+                        visualization_response.rendered_chart is not None
+                    ),
+                },
+                errors=visualization_response.errors,
+            )
         public_trace = finish_run(
             trace, status=state.status.value, success=True,
             answer=answer, errors=[],
@@ -418,6 +485,7 @@ class Orchestrator:
             success=True, answer=answer, intent=state.intent, plan=state.plan,
             results=state.agent_results, evidence=evidence, provenance=provenance,
             errors=[], run_id=trace["run_id"], observability=public_trace,
+            visualization=visualization,
         )
 
     def plan(self, question: str) -> OrchestratorState:

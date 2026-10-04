@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import pytest
-import yaml
-import pandas as pd
-from dataclasses import dataclass
-from typing import Any
 
 import pandas as pd
+import yaml
 
 SEMANTIC_FILES = (
     "metrics.yml",

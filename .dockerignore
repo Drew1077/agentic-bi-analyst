@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+.env
+*.log
+
+# Do not send the ~1 GB generated dataset to the Docker build context.
+data/

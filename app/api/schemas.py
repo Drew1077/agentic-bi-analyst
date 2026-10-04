@@ -33,6 +33,7 @@ class AnalyzeResponse(BaseModel):
     evidence: dict[str, Any]
     provenance: dict[str, Any]
     errors: list[str]
+    visualization: dict[str, Any] | None = None
 
 
 class HealthResponse(BaseModel):

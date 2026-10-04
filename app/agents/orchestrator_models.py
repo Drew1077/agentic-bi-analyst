@@ -82,6 +82,7 @@ class OrchestratorState:
     final_output: Any = None
     run_id: str | None = None
     observability: dict[str, Any] = field(default_factory=dict)
+    visualization: dict[str, Any] | None = None
 
 
 @dataclass
@@ -97,3 +98,4 @@ class OrchestratorResponse:
     errors: list[str]
     run_id: str | None = None
     observability: dict[str, Any] = field(default_factory=dict)
+    visualization: dict[str, Any] | None = None
