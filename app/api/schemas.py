@@ -30,8 +30,8 @@ class AnalyzeResponse(BaseModel):
     intent: str | None
     plan: dict[str, Any] | None
     results: dict[str, Any]
-    evidence: dict[str, Any]
-    provenance: dict[str, Any]
+    evidence: dict[str, Any] | list[Any]
+    provenance: dict[str, Any] | list[Any]
     errors: list[str]
     visualization: dict[str, Any] | None = None
 

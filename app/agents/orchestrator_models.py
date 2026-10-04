@@ -93,8 +93,8 @@ class OrchestratorResponse:
     intent: IntentType | None
     plan: Plan | None
     results: dict[str, AgentResult]
-    evidence: dict[str, Any]
-    provenance: dict[str, Any]
+    evidence: dict[str, Any] | list[Any]
+    provenance: dict[str, Any] | list[Any]
     errors: list[str]
     run_id: str | None = None
     observability: dict[str, Any] = field(default_factory=dict)

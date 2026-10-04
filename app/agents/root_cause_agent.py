@@ -265,6 +265,20 @@ class RootCauseAgent:
             )
 
             metric = current_spec.metric
+
+            if not current_spec.dimensions:
+                return RootCauseAgentResponse(
+                    success=False,
+                    answer=None,
+                    findings=[],
+                    evidence=[],
+                    provenance=[],
+                    errors=[
+                        "Root-cause analysis requires a comparison dimension, "
+                        "such as category, product, or brand."
+                    ],
+                )
+
             dimension = current_spec.dimensions[0]
 
             current_total = float(

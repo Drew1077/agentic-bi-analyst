@@ -235,7 +235,7 @@ class SQLAnalystAgent:
         metric_text = re.sub(r"\b(20\d{2})\b", "", question)
 
         metric_text = re.sub(
-            r"\b(in|for|during|of|year|month|quarter|week|day|by|what|was|were|is|are|the|show|give|tell|me|please|how|much)\b",
+            r"\b(in|for|during|of|year|month|quarter|week|day|by|what|was|were|is|are|the|show|give|tell|me|please|how|much|why|did|change|changed|increase|increased|decrease|decreased)\b",
             "",
             metric_text,
             flags=re.IGNORECASE,
