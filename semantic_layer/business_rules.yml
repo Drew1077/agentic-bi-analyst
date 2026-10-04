@@ -1,0 +1,69 @@
+version: "1.0"
+status: "governed_with_explicit_assumptions"
+
+rules:
+
+  base_sales_population:
+    type: semantic_assumption
+    rule: "Use loaded order_items rows as the base sales population. No order-status exclusion is authoritative in the supplied handoffs."
+    rationale: "The handoffs require evaluation of order statuses but do not establish which statuses count toward revenue."
+    future_change: "If Chat 05/06 discovers an explicit approved status rule in the actual schema/data contract, update this rule deliberately and document the change."
+
+  exclude_null_customer_id:
+    type: data_handling_rule
+    rule: "Customer counts and customer-normalized metrics exclude NULL customer_id."
+    rationale: "A NULL cannot identify a customer."
+
+  inventory_snapshot_population:
+    type: population_rule
+    rule: "Inventory metrics operate on inventory_snapshots rows and must respect snapshot date grain."
+    rationale: "inventory_snapshots grain is store × product × snapshot date."
+
+  return_population:
+    type: population_rule
+    rule: "Return metrics operate on returns rows using returns.return_date."
+    rationale: "Returns have their own event date and fact grain."
+
+  cancelled_orders:
+    type: unresolved_semantic_question
+    rule: "No authoritative include/exclude rule established."
+    required_action: "Do not silently exclude cancelled orders."
+
+  payment_status:
+    type: unresolved_semantic_question
+    rule: "No authoritative payment-status eligibility rule established."
+    required_action: "Payment metrics are not finalized in this catalog."
+
+  return_effect_on_revenue:
+    type: unresolved_semantic_question
+    rule: "Base net revenue is defined from order_items and is not automatically netted by returns."
+    rationale: "The authoritative financial contract defines net_revenue at order-item level; no return-adjusted revenue formula is established."
+
+  refunds:
+    type: unresolved_semantic_question
+    rule: "Refund amount is a separate return/refund measure and must not be subtracted from net revenue unless a future governed metric explicitly defines it."
+
+  stockout:
+    type: schema_binding_rule
+    rule: "Use the existing inventory_snapshots.stockout_flag field; do not derive a different stockout definition."
+    note: "Verified against the supplied Chat 03 01_init.sql schema."
+
+  marketing_validity:
+    type: unresolved_semantic_question
+    rule: "Marketing records are not assigned an additional validity filter beyond source data because no validity rule is established in the handoffs."
+
+  metric_aggregation:
+    type: governance_rule
+    rule: "Aggregate each fact at its native grain first. Derived ratios use ratio-of-aggregates unless the metric definition explicitly says otherwise."
+
+  division_by_zero:
+    type: governance_rule
+    rule: "Use SAFE_DIVIDE semantics: return NULL for a zero denominator."
+
+  date_authority:
+    type: governance_rule
+    rule: "Use the metric's declared authoritative date; never substitute orders.order_date for another business process."
+
+  semantic_source_of_truth:
+    type: governance_rule
+    rule: "Future analytics and agents must consume these definitions rather than inventing KPI formulas."

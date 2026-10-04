@@ -1,0 +1,68 @@
+version: "1.0"
+safe_joins:
+  orders_to_order_items:
+    relationship: "one_to_many"
+    key: "orders.order_id = order_items.order_id"
+    use: "Sales, product, customer, store and order-item analysis."
+    caution: "Order-level measures require COUNT(DISTINCT orders.order_id) after the join."
+
+  customers_to_orders:
+    relationship: "one_to_many"
+    key: "customers.customer_id = orders.customer_id"
+    use: "Customer dimensions and customer-level sales analysis."
+
+  stores_to_orders:
+    relationship: "one_to_many"
+    key: "stores.store_id = orders.store_id"
+    use: "Store and geographic sales analysis."
+
+  products_to_order_items:
+    relationship: "one_to_many"
+    key: "products.product_id = order_items.product_id"
+    use: "Product/category/brand sales analysis."
+
+  calendar_to_orders:
+    relationship: "one_to_many"
+    key: "calendar.date = orders.order_date"
+    use: "Order date attributes."
+
+  calendar_to_marketing:
+    relationship: "one_to_many"
+    key: "calendar.date = marketing_spend.date"
+    use: "Marketing date attributes."
+
+  calendar_to_inventory:
+    relationship: "one_to_many"
+    key: "calendar.date = inventory_snapshots.snapshot_date"
+    use: "Inventory date attributes."
+
+  stores_to_inventory:
+    relationship: "one_to_many"
+    key: "stores.store_id = inventory_snapshots.store_id"
+    use: "Inventory by store."
+
+  products_to_inventory:
+    relationship: "one_to_many"
+    key: "products.product_id = inventory_snapshots.product_id"
+    use: "Inventory by product."
+
+returns_relationships:
+  orders_to_returns:
+    relationship: "one_to_many"
+    key: "orders.order_id = returns.order_id"
+    rule: "Aggregate returns before combining with sales totals."
+
+  order_items_to_returns:
+    relationship: "one_to_many"
+    key: "order_items.order_item_id = returns.order_item_id"
+    rule: "Aggregate returns before combining with order-item sales totals."
+
+unsafe_patterns:
+  - "orders JOIN order_items JOIN payments without payment pre-aggregation"
+  - "orders JOIN order_items JOIN returns without return pre-aggregation"
+  - "order_items JOIN inventory_snapshots at raw row grain"
+  - "raw payments JOIN raw returns JOIN order_items in one SUM query"
+  - "summing closing_stock across multiple snapshot dates when a point-in-time value is requested"
+
+pre_aggregation_rule:
+  rule: "For independent one-to-many facts, calculate each fact separately at the intended analytical grain, then combine the aggregates."

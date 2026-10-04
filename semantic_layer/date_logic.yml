@@ -1,0 +1,35 @@
+version: "1.0"
+date_semantics:
+  orders:
+    date_field: "orders.order_date"
+    purpose: "Order/sales event timing."
+
+  payments:
+    date_field: "payments.payment_date"
+    purpose: "Payment transaction timing."
+
+  returns:
+    date_field: "returns.return_date"
+    purpose: "Return event timing."
+
+  marketing:
+    date_field: "marketing_spend.date"
+    purpose: "Marketing activity timing."
+
+  inventory:
+    date_field: "inventory_snapshots.snapshot_date"
+    purpose: "Inventory snapshot timing."
+
+  customer_acquisition:
+    date_field: "customers.signup_date"
+    purpose: "Customer acquisition/sign-up timing."
+
+calendar_attributes:
+  rule: "When a calendar dimension is used, join the calendar using the metric's authoritative date field."
+  available_concepts: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday]
+
+period_rules:
+  month: "Calendar month based on the authoritative date."
+  quarter: "Calendar quarter based on the authoritative date unless fiscal_quarter is explicitly requested."
+  year: "Calendar year based on the authoritative date unless fiscal_year is explicitly requested."
+  week: "Use the calendar's defined week attribute; do not recreate week logic independently."

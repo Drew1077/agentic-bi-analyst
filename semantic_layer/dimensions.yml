@@ -1,0 +1,58 @@
+version: "1.0"
+dimension_catalog:
+  time:
+    - date
+    - day
+    - week
+    - month
+    - quarter
+    - year
+    - fiscal_year
+    - fiscal_quarter
+    - season
+    - weekday_weekend
+    - holiday
+  product:
+    - product
+    - category
+    - subcategory
+    - brand
+    - product_status
+    - supplier_region
+  store:
+    - store
+    - store_type
+    - city
+    - state
+    - region
+    - store_status
+  customer:
+    - customer
+    - customer_segment
+    - gender
+    - city
+    - state
+    - region
+    - acquisition_channel
+    - preferred_device
+    - customer_status
+  marketing:
+    - channel
+    - campaign
+    - region
+  returns:
+    - return_reason
+    - return_status
+    - condition
+  inventory:
+    - store
+    - product
+    - date
+    - stockout_flag
+
+dimension_type_rule:
+  dimensions: "Descriptive/grouping attributes used to slice or filter measures."
+  measures: "Numeric business quantities that are aggregated or calculated."
+  derived_metrics: "Ratios or calculations built from governed base measures."
+
+status: "Only dimensions explicitly supported by the established schema should be bound by implementation."

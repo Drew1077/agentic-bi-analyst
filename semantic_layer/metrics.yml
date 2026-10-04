@@ -1,0 +1,293 @@
+# Semantic Metric Catalog — Agentic BI Analyst
+# Dataset: v1.0 | Seed: 20260915
+# IMPORTANT: No order-status/payment-status exclusion is defined in the authoritative handoffs.
+# Therefore base sales metrics use the loaded order_items rows as-is unless a later approved
+# semantic decision explicitly changes this rule.
+
+version: "1.0"
+metrics:
+
+  gross_revenue:
+    name: "Gross Revenue"
+    definition: "Pre-discount value of sold order-item lines."
+    formula: "SUM(order_items.quantity * order_items.unit_price)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "SUM"
+    null_handling: "Source rows required; NULL quantity/unit_price is not a valid metric input."
+    double_counting_risk: "Do not join payments or returns directly before aggregation."
+    unit: "currency"
+    synonyms: ["gross sales", "pre-discount sales", "sales before discount"]
+
+  net_revenue:
+    name: "Net Revenue"
+    definition: "Revenue after item-level discounts."
+    formula: "SUM(order_items.net_revenue)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "SUM"
+    null_handling: "NULL net_revenue rows are excluded by SUM; upstream required-field validation should prevent unexpected NULLs."
+    double_counting_risk: "Do not join payments or returns directly before aggregation."
+    unit: "currency"
+    synonyms: ["sales", "net sales", "revenue"]
+
+  gross_profit:
+    name: "Gross Profit"
+    definition: "Net revenue minus total item cost."
+    formula: "SUM(order_items.net_revenue) - SUM(order_items.quantity * order_items.unit_cost)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "SUM"
+    null_handling: "Required cost inputs must be non-null."
+    double_counting_risk: "Do not join payments or returns directly before aggregation."
+    unit: "currency"
+    synonyms: ["gross margin dollars", "gross earnings before operating expenses"]
+
+  profit_margin:
+    name: "Profit Margin"
+    definition: "Gross profit expressed as a percentage of net revenue."
+    formula: "SAFE_DIVIDE(gross_profit, net_revenue)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when net revenue is zero."
+    double_counting_risk: "Never average row-level profit percentages to obtain an aggregate margin."
+    unit: "percent"
+    synonyms: ["gross profit margin", "margin"]
+
+  discount_rate:
+    name: "Discount Rate"
+    definition: "Total discount amount divided by gross revenue."
+    formula: "SAFE_DIVIDE(SUM(order_items.gross_revenue * order_items.discount_percent), SUM(order_items.gross_revenue))"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when gross revenue is zero."
+    double_counting_risk: "Do not average item-level discount percentages; calculate weighted discount rate."
+    unit: "percent"
+    synonyms: ["discount percentage", "average discount rate"]
+
+  orders:
+    name: "Orders"
+    definition: "Distinct orders represented in the selected sales population."
+    formula: "COUNT(DISTINCT orders.order_id)"
+    source_tables: [orders]
+    primary_grain: order
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: null
+    filters: ["base_sales_population"]
+    aggregation: "COUNT_DISTINCT"
+    null_handling: "order_id is required."
+    double_counting_risk: "Joining order_items does not inflate COUNT(DISTINCT order_id), but COUNT(*) would."
+    unit: "orders"
+    synonyms: ["order count", "number of orders"]
+
+  units_sold:
+    name: "Units Sold"
+    definition: "Total quantity across order-item lines in the selected sales population."
+    formula: "SUM(order_items.quantity)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "SUM"
+    null_handling: "Required quantity must be non-null."
+    double_counting_risk: "Do not join one-to-many payments or returns before aggregation."
+    unit: "units"
+    synonyms: ["quantity sold", "items sold", "sales volume"]
+
+  average_order_value:
+    name: "Average Order Value"
+    definition: "Net revenue divided by distinct orders in the same filter context."
+    formula: "SAFE_DIVIDE(net_revenue, orders)"
+    source_tables: [orders, order_items]
+    primary_grain: order
+    required_joins: ["orders.order_id = order_items.order_id"]
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when order count is zero."
+    double_counting_risk: "Denominator must be COUNT(DISTINCT order_id), not order-item row count."
+    unit: "currency_per_order"
+    synonyms: ["AOV", "average basket value"]
+
+  average_selling_price:
+    name: "Average Selling Price"
+    definition: "Net revenue divided by units sold in the same filter context."
+    formula: "SAFE_DIVIDE(net_revenue, units_sold)"
+    source_tables: [order_items]
+    primary_grain: order_item
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, product, category, subcategory, brand, product_status, supplier_region, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when units sold is zero."
+    double_counting_risk: "Do not calculate as a simple average of line-level selling prices when quantities differ."
+    unit: "currency_per_unit"
+    synonyms: ["ASP", "average price"]
+
+  customer_count:
+    name: "Customer Count"
+    definition: "Distinct customers represented by orders in the selected population."
+    formula: "COUNT(DISTINCT orders.customer_id)"
+    source_tables: [orders]
+    primary_grain: customer
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, store, store_type, city, state, region, store_status, customer, customer_segment, gender, acquisition_channel, preferred_device, customer_status]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: null
+    filters: ["base_sales_population", "exclude_null_customer_id"]
+    aggregation: "COUNT_DISTINCT"
+    null_handling: "NULL customer IDs are excluded from distinct customer count."
+    double_counting_risk: "Use COUNT(DISTINCT customer_id), not COUNT(*) after item joins."
+    unit: "customers"
+    synonyms: ["unique customers", "customers served"]
+
+  customer_revenue:
+    name: "Customer Revenue"
+    definition: "Net revenue attributed to orders placed by the selected customers."
+    formula: "SUM(order_items.net_revenue)"
+    source_tables: [orders, order_items, customers]
+    primary_grain: order_item
+    required_joins: ["orders.order_id = order_items.order_id", "customers.customer_id = orders.customer_id"]
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, customer, customer_segment, gender, city, state, region, acquisition_channel, preferred_device, customer_status, store, store_type]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population"]
+    aggregation: "SUM"
+    null_handling: "NULL net_revenue is excluded by SUM; upstream required-field validation applies."
+    double_counting_risk: "Customer is many-to-one from orders; payments/returns still require pre-aggregation."
+    unit: "currency"
+    synonyms: ["sales by customer", "customer sales"]
+
+  revenue_per_customer:
+    name: "Revenue per Customer"
+    definition: "Net revenue divided by distinct customers in the same filter context."
+    formula: "SAFE_DIVIDE(customer_revenue, customer_count)"
+    source_tables: [orders, order_items, customers]
+    primary_grain: customer
+    required_joins: ["orders.order_id = order_items.order_id", "customers.customer_id = orders.customer_id"]
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, customer_segment, gender, city, state, region, acquisition_channel, preferred_device, customer_status, store, store_type]
+    authoritative_date_field: "orders.order_date"
+    required_date_join: "orders.order_id = order_items.order_id"
+    filters: ["base_sales_population", "exclude_null_customer_id"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when customer count is zero."
+    double_counting_risk: "Denominator is distinct customers, not orders or order items."
+    unit: "currency_per_customer"
+    synonyms: ["average revenue per customer", "ARPC"]
+
+  closing_stock:
+    name: "Closing Stock"
+    definition: "Inventory units at the end of a selected snapshot date/filter context."
+    formula: "SUM(inventory_snapshots.closing_stock)"
+    source_tables: [inventory_snapshots]
+    primary_grain: inventory_snapshot
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, store, store_type, city, state, region, store_status, product, category, subcategory, brand, product_status, supplier_region, stockout_flag]
+    authoritative_date_field: "inventory_snapshots.snapshot_date"
+    required_date_join: null
+    filters: ["inventory_snapshot_population"]
+    aggregation: "SUM"
+    null_handling: "Required inventory quantities must be non-null."
+    double_counting_risk: "Do not sum multiple daily snapshots when the question asks for stock at a point in time; select the intended snapshot date first."
+    unit: "units"
+    synonyms: ["ending inventory", "ending stock"]
+
+  stockout_rate:
+    name: "Stockout Rate"
+    definition: "Share of inventory snapshots flagged as stockouts."
+    formula: "SAFE_DIVIDE(SUM(CASE WHEN inventory_snapshots.stockout_flag = 1 THEN 1 ELSE 0 END), COUNT(*))"
+    source_tables: [inventory_snapshots]
+    primary_grain: inventory_snapshot
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, holiday, store, store_type, city, state, region, store_status, product, category, subcategory, brand, product_status, supplier_region]
+    authoritative_date_field: "inventory_snapshots.snapshot_date"
+    required_date_join: null
+    filters: ["inventory_snapshot_population"]
+    aggregation: "RATIO_OF_COUNTS"
+    null_handling: "Return NULL when no inventory snapshots are in context."
+    double_counting_risk: "Do not weight snapshots twice through product/store joins."
+    unit: "percent"
+    synonyms: ["stockout percentage", "out-of-stock rate"]
+
+  inventory_turnover:
+    name: "Inventory Turnover"
+    definition: "Units sold divided by average inventory units over the selected comparable inventory period."
+    formula: "SAFE_DIVIDE(units_sold, average_inventory_units)"
+    source_tables: [order_items, inventory_snapshots]
+    primary_grain: mixed
+    required_joins: ["Align sales and inventory at a common date/store/product grain before combining."]
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, store, store_type, city, state, region, store_status, product, category, subcategory, brand, product_status, supplier_region]
+    authoritative_date_field: "orders.order_date for units sold; inventory_snapshots.snapshot_date for inventory."
+    required_date_join: "No direct row-level join; aggregate each fact independently to the comparison grain."
+    filters: ["base_sales_population", "inventory_snapshot_population"]
+    aggregation: "RATIO_OF_AGGREGATES"
+    null_handling: "Return NULL when average inventory units are zero."
+    double_counting_risk: "Never directly join order_items to daily inventory snapshots at raw grain."
+    unit: "turns"
+    synonyms: ["inventory turns", "stock turnover"]
+
+    definition: "Returned units recorded in the returns fact."
+    formula: "SUM(returns.return_quantity)"
+    source_tables: [returns]
+    primary_grain: return
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, return_reason, return_status, condition]
+    authoritative_date_field: "returns.return_date"
+    required_date_join: null
+    filters: ["return_population"]
+    aggregation: "SUM"
+    null_handling: "Required return quantity must be non-null."
+    double_counting_risk: "Do not join returns to order_items before aggregation when calculating return totals."
+    unit: "units"
+    synonyms: ["returned units", "units returned"]
+
+    definition: "Refund amount recorded in the returns/payment process as defined by the source data."
+    formula: "SUM(returns.refund_amount)"
+    source_tables: [returns]
+    primary_grain: return
+    required_joins: []
+    allowed_dimensions: [date, day, week, month, quarter, year, fiscal_year, fiscal_quarter, season, weekday_weekend, return_reason, return_status, condition]
+    authoritative_date_field: "returns.return_date"
+    required_date_join: null
+    filters: ["return_population"]
+    aggregation: "SUM"
+    null_handling: "NULL refund amounts are excluded by SUM."
+    double_counting_risk: "Do not combine raw returns and raw payments in the same SUM without pre-aggregation."
+    unit: "currency"
+    synonyms: ["refunds", "refund value"]

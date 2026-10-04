@@ -1,0 +1,22 @@
+version: "1.0"
+project: "Agentic BI Analyst"
+dataset_version: "v1.0"
+seed: 20260915
+date_range:
+  start: "2024-01-01"
+  end: "2026-08-31"
+
+semantic_layer:
+  purpose: "Single source of truth for KPI definitions, dimensions, date semantics, business rules and join safety."
+  metric_catalog: "semantic_layer/metrics.yml"
+  dimension_catalog: "semantic_layer/dimensions.yml"
+  business_rules: "semantic_layer/business_rules.yml"
+  joins: "semantic_layer/joins.yml"
+  date_logic: "semantic_layer/date_logic.yml"
+  synonyms: "semantic_layer/synonyms.yml"
+
+governance:
+  financial_formulas_are_frozen: true
+  inventory_equation_is_frozen: true
+  source_dataset_is_frozen: true
+  schema_is_unchanged_by_chat_04: true
